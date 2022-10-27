@@ -3,5 +3,16 @@ dataset/
 __pycache__/
 *.iml
 .idea/
+amazon_dataset/
+output/
+adj_matrix.npy
+amazon_doc2vec.model
+feature_matrix.npy
+labels.npy
+my_doc2vec.model
+test_data.txt
+train_data.txt
+vectors.npy
+words_set.npy
 train_doc2vec/
 ```

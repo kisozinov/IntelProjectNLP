@@ -1,0 +1,45 @@
+body {
+    background-color: #e8e8e8;
+    font-family: Tahoma;
+    line-height: 1.5;
+    padding: 0;
+    margin: 0;
+}
+
+.field {
+    margin: 10px auto;
+    text-align: left;
+    height: 150px;
+    padding: 20px;
+    background-color: #e8e8e8;
+}
+
+#input_text, #btn {
+    padding: 10px;
+    margin: 10px;
+    background-color: #857edb;
+}
+#input_text {
+    width: 80%;
+    height: 100px;
+}
+#head {
+    width: 100%;
+	background: #e3e7ee url(logotype.jpg) no-repeat;
+    background-size: contain;
+	height: 120px;
+}
+.menu{
+	list-style: none;
+	margin: 0;
+    padding-left: 0;
+    position: relative;
+    left: 120px;
+    top: 50px;
+}
+a {text-decoration: none;}
+.top_bar{
+    display: inline;
+    margin-right: -4px;
+}
+

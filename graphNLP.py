@@ -106,6 +106,31 @@ def preprocessing(path_neg='\\dataset\\neg', path_pos='\\dataset\\pos'):
     return texts, labels_
 
 
+def single_preprocessing(raw_text):
+    punct = '".#$%&\'*+,-/:;<=>@[\\]^_`{|}~!'
+
+    def get_wordnet_pos(word):
+        """Map POS tag to first character lemmatize() accepts"""
+        tag = nltk.pos_tag([word])[0][1][0].upper()
+        tag_dict = {"J": wordnet.ADJ,
+                    "N": wordnet.NOUN,
+                    "V": wordnet.VERB,
+                    "R": wordnet.ADV}
+        return tag_dict.get(tag, wordnet.NOUN)
+
+    lemmatizer = WordNetLemmatizer()
+
+    for p in punct:
+        if p in raw_text:
+            raw_text = raw_text.replace(p, '')
+            raw_text = raw_text.replace(',', '')
+    lower_text = raw_text.lower()
+    my_stopwords = [w.casefold() for w in stopwords.words()]
+    texts_lem = [lemmatizer.lemmatize(w, get_wordnet_pos(w)) for w in nltk.word_tokenize(lower_text) if
+                 not w.casefold() in my_stopwords]
+
+    return texts_lem
+
 def tagged_document(list_of_list_of_words):
     for i, list_of_words in enumerate(list_of_list_of_words):
         yield gensim.models.doc2vec.TaggedDocument(list_of_words, [i])
@@ -114,7 +139,7 @@ def tagged_document(list_of_list_of_words):
 def docs2vecs(texts):
     # N = len(list(tagged_document(texts)))
     train_data = list(tagged_document(texts))  # [:int(N/2)]
-    model = gensim.models.doc2vec.Doc2Vec(vector_size=15, min_count=2, epochs=30)
+    model = gensim.models.doc2vec.Doc2Vec(vector_size=50, min_count=2, epochs=30)
     print('Doc2vec model is successfulely built.\n')
     model.build_vocab(train_data)
     model.train(train_data, total_examples=model.corpus_count, epochs=model.epochs)
@@ -141,6 +166,7 @@ def build_edges(dv_model, texts, threshsold):
     node_vectors = []
     for text in texts:
         node_vectors.append(dv_model.infer_vector(text))
+    np.save('vectors.npy', node_vectors)
     for tag in range(len(texts)):
         for key, value in my_most_similar(node_vectors, tag, threshsold):  ### 0.86 на 15
             all_edges.add((tag, key))
@@ -162,7 +188,7 @@ def build_feature_matrix(texts):
     words_set = set()
     for text in texts:
         words_set = words_set.union(set(text))
-
+    np.save('words_set.npy', np.array(list(words_set)))
     X = []
     for word in words_set:
         col = []
@@ -242,33 +268,53 @@ def mask_to_weights(mask):
     return mask.astype(np.float32) / np.count_nonzero(mask)
 
 
+class MyDataset(Dataset):
+
+    def __init__(self, feats=[[]], adj_matrix=[[]], labels=[[]], **kwargs):
+        self.adj = adj_matrix
+        self.x = feats
+        self.labels = labels
+        #self.nodes = nodes
+        #self.feats = feats
+        #self.labels = labels
+        super().__init__(**kwargs)
+
+    def download(self):
+        # data = ...  # Download from somewhere
+
+        # Create the directory
+        os.mkdir(self.path)
+        # Write the data to file
+        filename = os.path.join(self.path, f'graph')
+        x = self.x
+        a = self.adj
+        y = self.labels
+        np.savez(filename, x=x, a=a, y=y)
+
+    def read(self):
+        # We must return a list of Graph objects
+        output = []
+        print(self.path)
+        data = np.load(os.path.join(self.path, 'graph.npz'), allow_pickle=True)
+        print(data['x'], data['a'], data['y'])
+        output.append(
+            Graph(x=data['x'], a=data['a'], y=data['y'])
+        )
+
+        return output
+
+    def get_info(self):
+        return self.graphs
+
+    def add(self, inp_a, inp_x):
+        self.graphs[0].a = np.append(self.graphs[0].a, inp_a, axis=0)
+        inp_a_col = np.append(inp_a[0], 1).reshape(len(inp_a[0]) + 1, 1)
+        self.graphs[0].a = np.append(self.graphs[0].a, inp_a_col, axis=1)
+        self.graphs[0].x = np.append(self.graphs[0].x, inp_x, axis=0)
+
+
 def create_dataset(X, A, labels_encoded):
-    class MyDataset(Dataset):
-
-        def download(self):
-            # data = ...  # Download from somewhere
-
-            # Create the directory
-            os.mkdir(self.path)
-            # Write the data to file
-            filename = os.path.join(self.path, f'graph')
-            x = X
-            a = A
-            y = labels_encoded
-            np.savez(filename, x=x, a=a, y=y)
-
-        def read(self):
-            # We must return a list of Graph objects
-            output = []
-            print(self.path)
-            data = np.load(os.path.join(self.path, 'graph.npz'), allow_pickle=True)
-            print(data['x'], data['a'], data['y'])
-            output.append(
-                Graph(x=data['x'], a=data['a'], y=data['y'])
-            )
-
-            return output
-    return MyDataset()
+    return MyDataset(X, A, labels_encoded)
 
 
 def build_and_train_GCN_model(dataset, N, weights_tr, weights_va):
@@ -284,8 +330,8 @@ def build_and_train_GCN_model(dataset, N, weights_tr, weights_va):
     model.compile(
         optimizer=Adam(learning_rate),
         loss=BinaryCrossentropy(reduction="sum"),
-        metrics=[tf.keras.metrics.BinaryAccuracy()],
-        weighted_metrics=["acc"]
+        metrics=[tf.keras.metrics.BinaryAccuracy(), tf.keras.metrics.Precision(), tf.keras.metrics.Recall(), tf.keras.metrics.AUC()], # tf.keras.metrics.Precision()
+        weighted_metrics=[tf.keras.metrics.BinaryAccuracy()]
     )
 
     model.fit(
@@ -305,4 +351,5 @@ def evaluating_model(model, dataset, weights_te):
     print("Evaluating model.")
     loader_te = SingleLoader(dataset, sample_weights=weights_te)
     eval_results = model.evaluate(loader_te.load(), steps=loader_te.steps_per_epoch)
-    print("Done.\n" "Test loss: {}\n" "Test accuracy: {}".format(*eval_results))
+    print("Done.\n" "Test loss: {}\n" "Test accuracy: {} " "Test Precision: {} " "Test Recall: {} " "Test ROC AUC: {} ".format(*eval_results))
+    print(model.predict(loader_te.load(), steps=loader_te.steps_per_epoch))

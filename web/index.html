@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="eel.js"></script>
+</head>
+
+<body>
+    <div id = "head">
+	   <header>
+           <ul class = "menu">
+
+    </ul>
+        </header>
+    </div>
+    
+    <label for="model_select">Choose a model to predict:</label>
+
+    <select name="models" id="model_select">
+        <option value="gcn_predict">Graph Convolutional Network</option>
+        <option value="gbtree_predict">Gradient boost tree</option>
+    </select>
+    
+    <h3>Enter the text:</h3>
+    <div class="field">
+        <form>
+            <textarea id="input_text", placeholder="Type text here"></textarea>
+            <input type="button", id="btn", name="main_button" value="Submit" onclick="">
+        </form>
+    </div>
+    <h3>Your result:</h3>
+    <p id="output"></p>
+    
+    
+    <script>
+        let btn = document.querySelector("#btn");
+        btn.addEventListener("click", sendData);
+        async function sendData() {
+            let input_text = document.querySelector('#input_text').value;
+            document.getElementById("output").innerHTML = 'Loading...'
+            async function calc_res(input_text) {
+                let res = ' '
+                if (document.getElementById("model_select").value == 'gcn_predict'){
+                    res = await eel.gcn_predict(input_text)();
+                }
+                else if (document.getElementById("model_select").value == 'gbtree_predict'){
+                    res = await eel.gbtree_predict(input_text)();
+                }
+                
+                return res;
+            }
+            
+            document.getElementById("output").innerHTML = await calc_res(input_text);
+        }
+    </script>
+    
+
+</body>
+</html>
